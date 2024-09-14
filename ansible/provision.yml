@@ -1,0 +1,88 @@
+---
+- name: routing
+  become: true
+  hosts: all
+  tasks:
+
+  - name: Disable firewall
+    shell: systemctl stop ufw && systemctl disable ufw
+
+  - name: install dnsmasq
+    apt: 
+      name: dnsmasq
+      state: present
+      update_cache: true
+
+  - name: copy pxe.conf 
+    template: 
+      src: templates/pxe.conf
+      dest: /etc/dnsmasq.d/pxe.conf
+
+  - name: create /srv/tftp
+    file:
+      path: /srv/tftp
+      state: directory
+
+  - name: create /srv/images/
+    file:
+      path: /srv/images/
+      state: directory
+     
+  - name: download oracular-netboot-amd64.tar.gz
+    get_url:
+      url: https://releases.ubuntu.com/noble/ubuntu-24.04.1-netboot-amd64.tar.gz
+      dest: /tmp/ubuntu-24.04.1-netboot-amd64.tar.gz
+      
+  - name: download iso
+    get_url:
+      url: https://releases.ubuntu.com/noble/ubuntu-24.04.1-live-server-amd64.iso
+      dest: /srv/images/ubuntu-24.04.1-live-server-amd64.iso
+
+  - name: Extract ubuntu-24.04.1-netboot-amd64.tar.gz
+    shell: tar -xzvf /tmp/ubuntu-24.04.1-netboot-amd64.tar.gz -C /srv/tftp
+
+  - name: Copy file ks-server.conf
+    template: 
+      src: templates/ks-server.conf
+      dest: /etc/apache2/sites-available/ks-server.conf
+
+  - name: activate  ks-server.conf
+    shell: a2ensite ks-server.conf && systemctl restart apache2.service
+
+  - name: edit /srv/tftp/amd64/pxelinux.cfg/default
+    template: 
+      src: templates/default
+      dest: /srv/tftp/amd64/pxelinux.cfg/default
+
+
+  - name: create /srv/ks
+    file:
+      path: /srv/ks
+      state: directory
+
+
+  - name: copy /srv/ks/user-data 
+    template: 
+      src: templates/user-data
+      dest: /srv/ks/user-data
+
+  - name: touch file
+    file:
+      path: /srv/ks/meta-data
+      state: touch
+      #command: touch /srv/ks/meta-data
+
+  - name: copy /srv/ks/user-data 
+    template: 
+      src: templates/user-data
+      dest: /srv/ks/user-data
+
+  - name: restart 
+    service:
+       name: dnsmasq
+       state: restarted
+
+  - name: restart 
+    service:
+       name: apache2
+       state: restarted
